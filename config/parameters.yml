@@ -51,6 +51,7 @@ MODEL:
   USE:
     XYZ: False # If true: x,y, and z coordinates will be used as additional input channels
     INTENSITY: False # If true: intensity will be used as additional input channel
+    REL_XYZ: True # If true: Relative xyz between consecutive frames will be used.
   CHANNELS: # Number of channels in encoder and decoder, respectively.
     - 16
     - 32

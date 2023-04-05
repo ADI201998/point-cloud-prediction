@@ -114,7 +114,7 @@ class KittiOdometryRaw(Dataset):
         self.root_dir = os.environ.get("PCF_DATA_PROCESSED")
         self.height = self.cfg["DATA_CONFIG"]["HEIGHT"]
         self.width = self.cfg["DATA_CONFIG"]["WIDTH"]
-        self.n_channels = 5
+        self.n_channels = 8
 
         self.n_past_steps = self.cfg["MODEL"]["N_PAST_STEPS"]
         self.n_future_steps = self.cfg["MODEL"]["N_FUTURE_STEPS"]
@@ -201,6 +201,10 @@ class KittiOdometryRaw(Dataset):
             past_data[0, t, :, :] = self.load_range(past_filenames_range[t])
             past_data[1:4, t, :, :] = self.load_xyz(past_filenames_xyz[t])
             past_data[4, t, :, :] = self.load_intensity(past_filenames_intensity[t])
+            if t<self.n_past_steps-1:
+                past_data[5:8, t, :, :] = self.load_xyz(past_filenames_xyz[t + 1]) - self.load_xyz(past_filenames_xyz[t])
+            else:
+                past_data[5:8, t, :, :] = self.load_xyz(past_filenames_xyz[t])
 
         # Load future data
         fut_data = torch.empty(
