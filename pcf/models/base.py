@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from pytorch_lightning.core.lightning import LightningModule
 from pcf.models.loss import Loss
 from pcf.utils.projection import projection
-from pcf.utils.logger import log_point_clouds, save_range_and_mask, save_point_clouds
+from pcf.utils.logger import log_point_clouds, save_range_and_mask, save_point_clouds, save_range_and_mask_ply
 
 
 class BasePredictionModel(LightningModule):
@@ -39,6 +39,7 @@ class BasePredictionModel(LightningModule):
         self.n_future_steps = self.cfg["MODEL"]["N_FUTURE_STEPS"]
         self.use_xyz = self.cfg["MODEL"]["USE"]["XYZ"]
         self.use_intensity = self.cfg["MODEL"]["USE"]["INTENSITY"]
+        self.use_rel_xyz = self.cfg["MODEL"]["USE"]["REL_XYZ"]
 
         # Create list of index used in input
         self.inputs = [0]
@@ -48,6 +49,10 @@ class BasePredictionModel(LightningModule):
             self.inputs.append(3)
         if self.use_intensity:
             self.inputs.append(4)
+        if self.use_rel_xyz:
+            self.inputs.append(5)
+            self.inputs.append(6)
+            self.inputs.append(7)
         self.n_inputs = len(self.inputs)
 
         # Init loss
@@ -195,7 +200,7 @@ class BasePredictionModel(LightningModule):
             for sample_idx in range(frame_batch.shape[0]):
                 sequence = sequence_batch[sample_idx].item()
                 frame = frame_batch[sample_idx].item()
-                save_range_and_mask(
+                save_range_and_mask_ply(
                     self.cfg,
                     self.projection,
                     batch,

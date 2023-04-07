@@ -7,6 +7,7 @@ import matplotlib
 import open3d as o3d
 import numpy as np
 import torch.nn.functional as F
+import pickle
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -283,3 +284,81 @@ def save_range_and_mask(cfg, projection, batch, output, sample_index, sequence, 
         )
         plt.savefig(path + "/" + step + ".png", bbox_inches="tight", transparent=False)
         plt.close(fig)
+
+def save_range_and_mask_ply(cfg, projection, batch, output, sample_index, sequence, frame):
+    """Saves GT and predicted range images and masks to a file
+
+    Args:
+
+        cfg (dict): Parameters
+        projection (projection): Projection instance
+        batch (dict): Batch containing past and future range images
+        output (dict): Contains predicted mask logits and ranges
+        sample_index ([int): Selected sample in batch
+        sequence (int): Selected dataset sequence
+        frame (int): Selected frame number
+    """
+    _, _, n_past_steps, H, W = batch["past_data"].shape
+    _, _, n_future_steps, _, _ = batch["fut_data"].shape
+
+    min_range = -1.0  # due to invalid points
+    max_range = cfg["DATA_CONFIG"]["MAX_RANGE"]
+
+    past_range = batch["past_data"][sample_index, 0, :, :, :].view(n_past_steps, H, W)
+    future_range = batch["fut_data"][sample_index, 0, :, :, :].view(
+        n_future_steps, H, W
+    )
+
+    pred_rv = output["rv"][sample_index, :, :, :].view(n_future_steps, H, W)
+
+    # Get masks
+    past_mask = projection.get_target_mask_from_range_view(past_range)
+    future_mask = projection.get_target_mask_from_range_view(future_range)
+    pred_mask = projection.get_mask_from_output(output)[sample_index, :, :, :].view(
+        n_future_steps, H, W
+    )
+
+    concat_pred_mask = torch.cat(
+        (torch.zeros(past_mask.shape).type_as(past_mask), pred_mask), 0
+    )
+    concat_gt_mask = torch.cat((past_mask, future_mask), 0)
+
+    # Get normalized range views
+    concat_gt_rv = torch.cat((past_range, future_range), 0)
+    concat_gt_rv_normalized = (concat_gt_rv - min_range) / (max_range - min_range)
+
+    concat_pred_rv = torch.cat(
+        (torch.zeros(past_range.shape).type_as(past_range), pred_rv), 0
+    )
+    concat_pred_rv_normalized = (concat_pred_rv - min_range) / (max_range - min_range)
+
+    # Combine mask and rv predition
+    masked_prediction = projection.get_masked_range_view(output)[
+        sample_index, :, :, :
+    ].view(n_future_steps, H, W)
+    concat_combined_pred_rv = torch.cat(
+        (torch.zeros(past_range.shape).type_as(past_range), masked_prediction), 0
+    )
+    concat_combined_pred_rv_normalized = (concat_combined_pred_rv - min_range) / (
+        max_range - min_range
+    )
+
+    for s in range(n_past_steps + n_future_steps):
+        step = "{0:02d}".format(s)
+
+        # Save rv and mask predictions
+        path = make_path(
+            os.path.join(
+                cfg["LOG_DIR"], "range_view_predictions", str(sequence), str(frame)
+            )
+        )
+
+        data = {
+            "gt_rv": concat_gt_rv_normalized[s, :, :].cpu().detach().numpy(),
+            "pred_comb": concat_combined_pred_rv_normalized[s, :, :].cpu().detach().numpy(),
+            "pred_rv": concat_pred_rv_normalized[s, :, :].cpu().detach().numpy(),
+            "gt_mask": concat_gt_mask[s, :, :].cpu().detach().numpy(),
+            "pred_mask": concat_pred_mask[s, :, :].cpu().detach().numpy()
+        }
+        with open(path + "/" + step + ".pkl", "wb") as f:
+            pickle.dump(data, f)
